@@ -121,7 +121,9 @@ fn sync_tsk_state() -> Result<()> {
 
     for (name, task) in state.iter_mut() {
         // Find matching tsk task
-        let tsk_task = tsk_tasks.iter().find(|t| t.name == *name || t.id == task.tsk_id);
+        let tsk_task = tsk_tasks.iter()
+            .find(|t| t.id == task.tsk_id)
+            .or_else(|| tsk_tasks.iter().find(|t| t.name == *name));
 
         if let Some(tsk_task) = tsk_task {
             let tsk_status = tsk_task.status.to_uppercase();

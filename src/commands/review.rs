@@ -71,12 +71,13 @@ fn extract_comments(output: &str) -> Option<String> {
 
 /// Queue a follow-up task with the review comments as the new prompt
 fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result<()> {
-    // Validate task name before using it in file paths
-    state::validate_task_name(name)?;
+    // Derive a distinct name for the follow-up to avoid collisions
+    let followup_name = format!("{name}-r{}", task.revision);
+    state::validate_task_name(&followup_name)?;
 
     // Write comments to a temp file as the new prompt
     let kiln_dir = state::kiln_dir()?;
-    let prompt_path = kiln_dir.join(format!("{name}-review-{}.md", task.revision + 1));
+    let prompt_path = kiln_dir.join(format!("{followup_name}-review.md"));
     let mut file = std::fs::File::create(&prompt_path)?;
 
     writeln!(file, "# Review feedback (revision {})", task.revision + 1)?;
@@ -86,24 +87,30 @@ fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result
     writeln!(file)?;
     writeln!(file, "{comments}")?;
 
-    // Transition to CHANGES_REQUESTED before re-queuing
-    state::update_task_status(name, Status::ChangesRequested)?;
+    // Queue new tsk task with the distinct follow-up name
+    let (tsk_id, tsk_branch) = tsk::add_task(&followup_name, &prompt_path)?;
 
-    // Queue new tsk task
-    let (tsk_id, tsk_branch) = tsk::add_task(name, &prompt_path)?;
-
-    // Update state with new tsk task info
+    // Single read-modify-write: mark original as ChangesRequested and insert new entry
     let mut state_map = state::read_state()?;
     if let Some(t) = state_map.get_mut(name) {
-        t.status = Status::Queued;
-        t.tsk_id = tsk_id;
-        t.tsk_branch = tsk_branch;
-        t.revision += 1;
+        t.status = Status::ChangesRequested;
         t.updated_at = chrono::Utc::now();
     }
+    state_map.insert(
+        followup_name.clone(),
+        state::TaskState {
+            status: Status::Queued,
+            tsk_id,
+            tsk_branch,
+            base_ref: task.base_ref.clone(),
+            base_commit: task.base_commit.clone(),
+            revision: task.revision + 1,
+            updated_at: chrono::Utc::now(),
+        },
+    );
     state::write_state(&state_map)?;
 
-    println!("Follow-up queued (revision {})", task.revision + 1);
+    println!("Follow-up '{followup_name}' queued (revision {})", task.revision + 1);
     Ok(())
 }
 

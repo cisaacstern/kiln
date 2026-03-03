@@ -27,6 +27,17 @@ pub fn run(name: &str, prompt_file: &Path) -> Result<()> {
 
     let mut state_map = state::read_state()?;
 
+    // Reject duplicate active task names
+    if let Some(existing) = state_map.get(name) {
+        if !matches!(existing.status, Status::Approved | Status::Failed) {
+            bail!(
+                "Task '{}' already exists (status: {}). Use a different name.",
+                name,
+                existing.status
+            );
+        }
+    }
+
     // Capture base ref info before queuing
     let base_ref = state::current_branch()?;
     let base_commit = state::current_commit()?;
