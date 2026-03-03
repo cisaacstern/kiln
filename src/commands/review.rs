@@ -17,6 +17,10 @@ pub fn run(name: &str) -> Result<()> {
         );
     }
 
+    // Validate branch/ref names before passing to external commands
+    state::validate_git_ref(&task.tsk_branch)?;
+    state::validate_git_ref(&task.base_ref)?;
+
     // Transition to IN_REVIEW
     state::update_task_status(name, Status::InReview)?;
     println!("Starting review for '{name}'...");
@@ -67,6 +71,9 @@ fn extract_comments(output: &str) -> Option<String> {
 
 /// Queue a follow-up task with the review comments as the new prompt
 fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result<()> {
+    // Validate task name before using it in file paths
+    state::validate_task_name(name)?;
+
     // Write comments to a temp file as the new prompt
     let kiln_dir = state::kiln_dir()?;
     let prompt_path = kiln_dir.join(format!("{name}-review-{}.md", task.revision + 1));

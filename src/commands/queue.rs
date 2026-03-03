@@ -6,8 +6,23 @@ use crate::state::{self, Status, TaskState};
 use crate::tsk;
 
 pub fn run(name: &str, prompt_file: &Path) -> Result<()> {
+    // Validate task name to prevent path traversal
+    state::validate_task_name(name)?;
+
     if !prompt_file.exists() {
         bail!("Prompt file not found: {}", prompt_file.display());
+    }
+
+    // Canonicalize the prompt file path and verify it's within the project root
+    let canonical_prompt = prompt_file
+        .canonicalize()
+        .map_err(|e| anyhow::anyhow!("Failed to resolve prompt file path: {}", e))?;
+    let project_root = state::find_project_root()?;
+    if !canonical_prompt.starts_with(&project_root) {
+        bail!(
+            "Prompt file must be within the project directory ({})",
+            project_root.display()
+        );
     }
 
     let mut state_map = state::read_state()?;

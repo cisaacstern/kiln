@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use serde::Deserialize;
 use std::path::PathBuf;
 
@@ -15,7 +15,7 @@ pub struct Config {
 impl Config {
     /// Load config from ~/.config/kiln/config.toml, falling back to defaults
     pub fn load() -> Result<Self> {
-        let config_path = config_file_path();
+        let config_path = config_file_path()?;
         if config_path.exists() {
             let contents = std::fs::read_to_string(&config_path)?;
             let config: Config = toml_parse(&contents)?;
@@ -26,17 +26,17 @@ impl Config {
     }
 }
 
-fn config_file_path() -> PathBuf {
-    dirs_fallback().join("kiln").join("config.toml")
+fn config_file_path() -> Result<PathBuf> {
+    Ok(dirs_fallback()?.join("kiln").join("config.toml"))
 }
 
-fn dirs_fallback() -> PathBuf {
+fn dirs_fallback() -> Result<PathBuf> {
     if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME") {
-        PathBuf::from(xdg)
+        Ok(PathBuf::from(xdg))
     } else if let Ok(home) = std::env::var("HOME") {
-        PathBuf::from(home).join(".config")
+        Ok(PathBuf::from(home).join(".config"))
     } else {
-        PathBuf::from("/tmp/.config")
+        bail!("Could not determine config directory: neither XDG_CONFIG_HOME nor HOME is set")
     }
 }
 

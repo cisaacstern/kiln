@@ -77,6 +77,9 @@ fn parse_tsk_add_output(output: &str, name: &str) -> Result<(String, String)> {
     let mut id = String::new();
     let mut branch = String::new();
 
+    // Require IDs to contain at least one letter and one digit
+    let id_re = regex::Regex::new(r"^[a-zA-Z0-9]{6,16}$").unwrap();
+
     for line in output.lines() {
         let line = line.trim();
         if line.is_empty() {
@@ -84,12 +87,11 @@ fn parse_tsk_add_output(output: &str, name: &str) -> Result<(String, String)> {
         }
         // Look for task ID (typically first meaningful output)
         if id.is_empty() {
-            // Try to find an ID-like string (alphanumeric, 6-12 chars)
             for word in line.split_whitespace() {
                 let clean = word.trim_matches(|c: char| !c.is_alphanumeric());
-                if clean.len() >= 6
-                    && clean.len() <= 16
-                    && clean.chars().all(|c| c.is_alphanumeric())
+                if id_re.is_match(clean)
+                    && clean.chars().any(|c| c.is_ascii_alphabetic())
+                    && clean.chars().any(|c| c.is_ascii_digit())
                 {
                     id = clean.to_string();
                     break;
@@ -108,18 +110,18 @@ fn parse_tsk_add_output(output: &str, name: &str) -> Result<(String, String)> {
     }
 
     if id.is_empty() {
-        // Fallback: use first non-empty line as ID
-        id = output
-            .lines()
-            .find(|l| !l.trim().is_empty())
-            .unwrap_or("unknown")
-            .trim()
-            .to_string();
+        bail!("Could not parse a valid task ID from tsk add output");
     }
 
     if branch.is_empty() {
         // Construct expected branch name
         branch = format!("tsk/generic/{}/{}", name, id);
+    }
+
+    // Validate the constructed branch name matches git ref pattern
+    let ref_re = regex::Regex::new(r"^[a-zA-Z0-9/_.\-]+$").unwrap();
+    if !ref_re.is_match(&branch) {
+        bail!("Constructed branch name '{}' contains invalid characters", branch);
     }
 
     Ok((id, branch))

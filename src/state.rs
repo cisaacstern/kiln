@@ -1,5 +1,6 @@
 use anyhow::{Context, Result, bail};
 use chrono::{DateTime, Utc};
+use fs2::FileExt;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
@@ -71,8 +72,31 @@ fn state_file_path() -> Result<PathBuf> {
     Ok(kiln_dir()?.join("state.json"))
 }
 
+/// Acquire an advisory lock on the state lock file.
+/// Returns the lock file handle (lock released on drop).
+fn lock_state(exclusive: bool) -> Result<fs::File> {
+    let lock_path = kiln_dir()?.join("state.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .context("Failed to open state lock file")?;
+    if exclusive {
+        lock_file
+            .lock_exclusive()
+            .context("Failed to acquire exclusive state lock")?;
+    } else {
+        lock_file
+            .lock_shared()
+            .context("Failed to acquire shared state lock")?;
+    }
+    Ok(lock_file)
+}
+
 /// Read the state file, returning an empty map if it doesn't exist
 pub fn read_state() -> Result<StateMap> {
+    let _lock = lock_state(false)?;
     let path = state_file_path()?;
     if !path.exists() {
         return Ok(HashMap::new());
@@ -84,11 +108,22 @@ pub fn read_state() -> Result<StateMap> {
 
 /// Write the state file atomically (write to temp file, then rename)
 pub fn write_state(state: &StateMap) -> Result<()> {
+    let _lock = lock_state(true)?;
     let path = state_file_path()?;
-    let dir = path.parent().unwrap();
+    let dir = path.parent().context("state file path has no parent")?;
     let temp_path = dir.join("state.json.tmp");
     let contents = serde_json::to_string_pretty(state)?;
     fs::write(&temp_path, &contents).context("Failed to write temp state file")?;
+
+    // Set restrictive permissions before renaming into place
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(&temp_path, perms)
+            .context("Failed to set state file permissions")?;
+    }
+
     fs::rename(&temp_path, &path).context("Failed to rename temp state file")?;
     Ok(())
 }
@@ -134,6 +169,38 @@ pub fn current_branch() -> Result<String> {
         bail!("Failed to get current branch");
     }
     Ok(String::from_utf8(output.stdout)?.trim().to_string())
+}
+
+/// Validate that a task name contains only safe characters (alphanumeric, hyphens, underscores).
+/// Rejects path separators and special characters to prevent path traversal.
+pub fn validate_task_name(name: &str) -> Result<()> {
+    if name.is_empty() {
+        bail!("Task name must not be empty");
+    }
+    let re = regex::Regex::new(r"^[a-zA-Z0-9_-]+$").unwrap();
+    if !re.is_match(name) {
+        bail!(
+            "Invalid task name '{}': must contain only alphanumeric characters, hyphens, and underscores",
+            name
+        );
+    }
+    Ok(())
+}
+
+/// Validate that a string looks like a safe git ref name.
+/// Rejects shell metacharacters and other potentially dangerous characters.
+pub fn validate_git_ref(ref_name: &str) -> Result<()> {
+    if ref_name.is_empty() {
+        bail!("Git ref name must not be empty");
+    }
+    let re = regex::Regex::new(r"^[a-zA-Z0-9/_.\-]+$").unwrap();
+    if !re.is_match(ref_name) {
+        bail!(
+            "Invalid git ref '{}': contains disallowed characters",
+            ref_name
+        );
+    }
+    Ok(())
 }
 
 /// Count tasks by status

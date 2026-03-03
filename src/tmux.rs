@@ -80,8 +80,10 @@ pub fn create_session(project_dir: &str) -> Result<()> {
     Ok(())
 }
 
-/// Send a command to a specific pane
-pub fn send_keys(pane: u32, keys: &str) -> Result<()> {
+/// Send a command to a specific pane.
+/// Safety: `keys` must never contain user-controlled input, as it is passed
+/// directly to tmux send-keys without sanitization.
+pub(crate) fn send_keys(pane: u32, keys: &str) -> Result<()> {
     run_tmux(&[
         "send-keys",
         "-t",

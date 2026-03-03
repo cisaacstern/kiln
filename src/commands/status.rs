@@ -1,5 +1,7 @@
 use anyhow::Result;
 use colored::Colorize;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -9,7 +11,13 @@ use crate::tsk;
 
 pub fn run(watch: bool, daemon: bool) -> Result<()> {
     if watch || daemon {
-        loop {
+        let running = Arc::new(AtomicBool::new(true));
+        let r = running.clone();
+        ctrlc::set_handler(move || {
+            r.store(false, Ordering::SeqCst);
+        })?;
+
+        while running.load(Ordering::SeqCst) {
             if daemon {
                 sync_tsk_state()?;
                 update_window_name()?;

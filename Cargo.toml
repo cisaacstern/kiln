@@ -11,3 +11,6 @@ chrono = { version = "0.4", features = ["serde"] }
 colored = "3"
 anyhow = "1"
 which = "7"
+fs2 = "0.4"
+ctrlc = "3"
+regex = "1"
