@@ -27,10 +27,10 @@ pub fn run() -> Result<()> {
     tmux::create_session(project_dir_str)?;
 
     // Pane 1: tsk server
-    tmux::send_keys(1, "tsk serve")?;
+    tmux::send_keys(1, "tsk server start")?;
 
     // Pane 2: tsk list watch
-    tmux::send_keys(2, "watch -n2 tsk list")?;
+    tmux::send_keys(2, "while true; do clear; tsk list; sleep 2; done")?;
 
     // Pane 3: kiln status watcher
     tmux::send_keys(3, "kiln status --daemon")?;
