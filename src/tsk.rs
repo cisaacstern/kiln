@@ -57,7 +57,7 @@ fn parse_tsk_list(output: &str) -> Result<Vec<TskTask>> {
 /// Add a new task via `tsk add`, returning (task_id, branch_name)
 pub fn add_task(name: &str, prompt_file: &std::path::Path) -> Result<(String, String)> {
     let output = Command::new("tsk")
-        .args(["add", name, "--prompt-file"])
+        .args(["add", "--name", name, "--prompt-file"])
         .arg(prompt_file)
         .output()
         .context("Failed to run 'tsk add'")?;
