@@ -154,3 +154,80 @@ fn run_tmux(args: &[&str]) -> Result<()> {
     }
     Ok(())
 }
+
+/// Run a tmux command and capture stdout
+fn run_tmux_output(args: &[&str]) -> Result<String> {
+    let output = Command::new("tmux")
+        .args(args)
+        .output()
+        .context("Failed to run tmux")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        anyhow::bail!("tmux command failed: {}", stderr);
+    }
+    Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
+}
+
+/// Set a pane's title
+pub fn set_pane_title(pane_id: &str, title: &str) -> Result<()> {
+    run_tmux(&["select-pane", "-t", pane_id, "-T", title])
+}
+
+#[derive(Debug, Clone)]
+pub struct PaneInfo {
+    pub pane_id: String,
+    pub title: String,
+    pub window_index: String,
+}
+
+/// List all panes in the kiln session
+pub fn list_session_panes() -> Result<Vec<PaneInfo>> {
+    let output = run_tmux_output(&[
+        "list-panes",
+        "-s",
+        "-t",
+        SESSION_NAME,
+        "-F",
+        "#{pane_id}\t#{pane_title}\t#{window_index}",
+    ])?;
+    let mut panes = Vec::new();
+    for line in output.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 3 {
+            panes.push(PaneInfo {
+                pane_id: parts[0].to_string(),
+                title: parts[1].to_string(),
+                window_index: parts[2].to_string(),
+            });
+        }
+    }
+    Ok(panes)
+}
+
+/// Swap two panes
+pub fn swap_pane(src_id: &str, dst_id: &str) -> Result<()> {
+    run_tmux(&["swap-pane", "-s", src_id, "-t", dst_id])
+}
+
+/// Create a new hidden window with claude running, return its pane ID
+pub fn new_hidden_window(dir: &str) -> Result<String> {
+    let pane_id = run_tmux_output(&[
+        "new-window",
+        "-d",
+        "-t",
+        SESSION_NAME,
+        "-c",
+        dir,
+        "-P",
+        "-F",
+        "#{pane_id}",
+    ])?;
+    // Send claude command to the new pane
+    run_tmux(&["send-keys", "-t", &pane_id, "claude", "Enter"])?;
+    Ok(pane_id)
+}
+
+/// Get the pane ID for a target specifier (e.g. "kiln:0.4")
+pub fn get_pane_id(target: &str) -> Result<String> {
+    run_tmux_output(&["display-message", "-t", target, "-p", "#{pane_id}"])
+}
