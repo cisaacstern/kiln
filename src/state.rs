@@ -58,18 +58,48 @@ pub fn find_project_root() -> Result<PathBuf> {
     Ok(PathBuf::from(root))
 }
 
-/// Get the .kiln directory path, creating it if needed
+/// Get the global kiln state directory for the current repo, creating it if needed.
+/// State is stored at ~/.local/share/kiln/repos/<repo-hash>/ so that kiln
+/// remains invisible to the repo itself (no .kiln directory in the project).
 pub fn kiln_dir() -> Result<PathBuf> {
     let root = find_project_root()?;
-    let dir = root.join(".kiln");
-    if !dir.exists() {
-        fs::create_dir_all(&dir).context("Failed to create .kiln directory")?;
+    let repo_id = repo_hash(&root);
+    let base = data_dir()?.join("kiln").join("repos").join(&repo_id);
+    if !base.exists() {
+        fs::create_dir_all(&base).context("Failed to create kiln state directory")?;
     }
-    let plans_dir = dir.join("plans");
+    let plans_dir = base.join("plans");
     if !plans_dir.exists() {
-        fs::create_dir_all(&plans_dir).context("Failed to create .kiln/plans directory")?;
+        fs::create_dir_all(&plans_dir).context("Failed to create kiln plans directory")?;
     }
-    Ok(dir)
+    Ok(base)
+}
+
+/// Compute a stable, filesystem-safe identifier for a repo path.
+fn repo_hash(root: &std::path::Path) -> String {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+    let canonical = root.to_string_lossy();
+    let mut hasher = DefaultHasher::new();
+    canonical.hash(&mut hasher);
+    let hash = hasher.finish();
+    // Use last component of path + truncated hash for readability
+    let name = root
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_else(|| "repo".to_string());
+    format!("{name}-{hash:016x}")
+}
+
+/// XDG-compatible data directory
+fn data_dir() -> Result<PathBuf> {
+    if let Ok(xdg) = std::env::var("XDG_DATA_HOME") {
+        Ok(PathBuf::from(xdg))
+    } else if let Ok(home) = std::env::var("HOME") {
+        Ok(PathBuf::from(home).join(".local").join("share"))
+    } else {
+        bail!("Could not determine data directory: neither XDG_DATA_HOME nor HOME is set")
+    }
 }
 
 fn state_file_path() -> Result<PathBuf> {

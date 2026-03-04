@@ -6,7 +6,7 @@ use crate::tmux;
 
 /// Set the pane status for the calling Claude pane.
 /// Identifies the pane via $TMUX_PANE env var, looks up its title,
-/// and writes the status to .kiln/pane-status.json.
+/// and writes the status to the kiln state directory.
 pub fn run(status_str: &str) -> Result<()> {
     let status: PaneStatus = status_str.parse()?;
 

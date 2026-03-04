@@ -24,6 +24,3 @@ target
 # Added by cargo
 
 /target
-
-# Kiln project data
-.kiln/

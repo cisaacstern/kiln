@@ -59,7 +59,7 @@ pub fn run(name: &str, prompt_file: Option<&Path>) -> Result<()> {
     state_map.insert(name.to_string(), task_state);
     state::write_state(&state_map)?;
 
-    println!("State saved to .kiln/state.json");
+    println!("State saved.");
     Ok(())
 }
 
@@ -71,7 +71,10 @@ fn resolve_explicit_prompt(prompt_file: &Path) -> Result<PathBuf> {
         .canonicalize()
         .map_err(|e| anyhow::anyhow!("Failed to resolve prompt file path: {}", e))?;
     let project_root = state::find_project_root()?;
-    if !canonical_prompt.starts_with(&project_root) {
+    let kiln_state_dir = state::kiln_dir()?;
+    if !canonical_prompt.starts_with(&project_root)
+        && !canonical_prompt.starts_with(&kiln_state_dir)
+    {
         bail!(
             "Prompt file must be within the project directory ({})",
             project_root.display()
