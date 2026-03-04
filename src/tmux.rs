@@ -16,7 +16,7 @@ pub fn session_exists() -> bool {
         .is_ok_and(|o| o.status.success())
 }
 
-/// Create the kiln tmux session with 5-pane layout
+/// Create the kiln tmux session with 4-pane layout
 pub fn create_session(project_dir: &str) -> Result<()> {
     // Create new detached session (pane 0 = main terminal)
     run_tmux(&[
@@ -28,7 +28,7 @@ pub fn create_session(project_dir: &str) -> Result<()> {
         project_dir,
     ])?;
 
-    // Split to create bottom area (pane 1)
+    // Split pane 0 vertically to create bottom area (pane 1)
     // Main terminal keeps ~40% height
     run_tmux(&[
         "split-window",
@@ -41,36 +41,24 @@ pub fn create_session(project_dir: &str) -> Result<()> {
         project_dir,
     ])?;
 
-    // Split pane 1 horizontally to create pane 2 (tsk list)
+    // Split pane 1 vertically to create pane 2 (kiln status, bottom-left lower)
+    run_tmux(&[
+        "split-window",
+        "-t",
+        &format!("{SESSION_NAME}:0.1"),
+        "-v",
+        "-p",
+        "50",
+        "-c",
+        project_dir,
+    ])?;
+
+    // Split pane 1 horizontally to create pane 3 (claude code, bottom-right)
     run_tmux(&[
         "split-window",
         "-t",
         &format!("{SESSION_NAME}:0.1"),
         "-h",
-        "-p",
-        "50",
-        "-c",
-        project_dir,
-    ])?;
-
-    // Split pane 1 vertically to create bottom-left row (pane 3 = devloop status)
-    run_tmux(&[
-        "split-window",
-        "-t",
-        &format!("{SESSION_NAME}:0.1"),
-        "-v",
-        "-p",
-        "50",
-        "-c",
-        project_dir,
-    ])?;
-
-    // Split pane 2 vertically to create bottom-right (pane 4 = claude code)
-    run_tmux(&[
-        "split-window",
-        "-t",
-        &format!("{SESSION_NAME}:0.2"),
-        "-v",
         "-p",
         "50",
         "-c",

@@ -23,20 +23,17 @@ pub fn run() -> Result<()> {
 
     println!("Starting kiln session...");
 
-    // Create tmux session with 5-pane layout
+    // Create tmux session with 4-pane layout
     tmux::create_session(project_dir_str)?;
 
     // Pane 1: tsk server
     tmux::send_keys(1, "tsk server start")?;
 
-    // Pane 2: tsk list watch
-    tmux::send_keys(2, "while true; do clear; tsk list; sleep 2; done")?;
+    // Pane 2: kiln status watcher
+    tmux::send_keys(2, "kiln status --daemon")?;
 
-    // Pane 3: kiln status watcher
-    tmux::send_keys(3, "kiln status --daemon")?;
-
-    // Pane 4: claude code
-    tmux::send_keys(4, "claude")?;
+    // Pane 3: claude code
+    tmux::send_keys(3, "claude")?;
 
     // Focus the main terminal pane
     tmux::select_pane(0)?;
