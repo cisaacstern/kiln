@@ -219,3 +219,38 @@ pub fn new_hidden_window(dir: &str) -> Result<String> {
 pub fn get_pane_id(target: &str) -> Result<String> {
     run_tmux_output(&["display-message", "-t", target, "-p", "#{pane_id}"])
 }
+
+/// Get the title for a pane by its pane ID (e.g. "%5")
+pub fn get_pane_title(pane_id: &str) -> Result<String> {
+    run_tmux_output(&["display-message", "-t", pane_id, "-p", "#{pane_title}"])
+}
+
+/// Split a pane horizontally, returning the new pane ID.
+/// If `before` is true, the new pane is created to the left.
+/// `size` is the width in columns for the new pane.
+pub fn split_pane_horizontal(target: &str, size: u32, dir: &str, before: bool) -> Result<String> {
+    let size_str = size.to_string();
+    let mut args = vec![
+        "split-window",
+        "-t",
+        target,
+        "-h",
+        "-l",
+        &size_str,
+        "-c",
+        dir,
+        "-P",
+        "-F",
+        "#{pane_id}",
+    ];
+    if before {
+        args.push("-b");
+    }
+    run_tmux_output(&args)
+}
+
+/// Send keys to a specific pane by pane ID.
+/// Safety: `keys` must never contain user-controlled input.
+pub(crate) fn send_keys_to_pane(pane_id: &str, keys: &str) -> Result<()> {
+    run_tmux(&["send-keys", "-t", pane_id, keys, "Enter"])
+}

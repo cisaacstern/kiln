@@ -39,6 +39,11 @@ pub fn run() -> Result<()> {
     let pane_id = tmux::get_pane_id("kiln:0.4")?;
     tmux::set_pane_title(&pane_id, "claude-0")?;
 
+    // Create sidebar pane to the left of the Claude pane
+    let sidebar_pane_id = tmux::split_pane_horizontal(&pane_id, 25, project_dir_str, true)?;
+    tmux::set_pane_title(&sidebar_pane_id, "sidebar")?;
+    tmux::send_keys_to_pane(&sidebar_pane_id, "kiln sidebar --daemon")?;
+
     // Focus the main terminal pane
     tmux::select_pane(0)?;
 

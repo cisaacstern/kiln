@@ -281,3 +281,102 @@ pub fn write_plans(plans: &PlanMap) -> Result<()> {
 pub fn plans_dir() -> Result<PathBuf> {
     Ok(kiln_dir()?.join("plans"))
 }
+
+// --- Pane status ---
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PaneStatus {
+    Working,
+    Waiting,
+    Done,
+    Unknown,
+}
+
+impl PaneStatus {
+    pub fn icon(&self) -> &'static str {
+        match self {
+            PaneStatus::Working => "🤖",
+            PaneStatus::Waiting => "✋",
+            PaneStatus::Done => "✅",
+            PaneStatus::Unknown => "⚪",
+        }
+    }
+}
+
+impl std::str::FromStr for PaneStatus {
+    type Err = anyhow::Error;
+    fn from_str(s: &str) -> Result<Self> {
+        match s {
+            "working" => Ok(PaneStatus::Working),
+            "waiting" => Ok(PaneStatus::Waiting),
+            "done" => Ok(PaneStatus::Done),
+            "unknown" => Ok(PaneStatus::Unknown),
+            _ => bail!("Invalid pane status '{}': expected working, waiting, done, or unknown", s),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PaneStatusEntry {
+    pub status: PaneStatus,
+    pub updated_at: DateTime<Utc>,
+}
+
+pub type PaneStatusMap = HashMap<String, PaneStatusEntry>;
+
+fn pane_status_file_path() -> Result<PathBuf> {
+    Ok(kiln_dir()?.join("pane-status.json"))
+}
+
+fn lock_pane_status(exclusive: bool) -> Result<fs::File> {
+    let lock_path = kiln_dir()?.join("pane-status.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .context("Failed to open pane-status lock file")?;
+    if exclusive {
+        lock_file
+            .lock_exclusive()
+            .context("Failed to acquire exclusive pane-status lock")?;
+    } else {
+        lock_file
+            .lock_shared()
+            .context("Failed to acquire shared pane-status lock")?;
+    }
+    Ok(lock_file)
+}
+
+pub fn read_pane_status() -> Result<PaneStatusMap> {
+    let _lock = lock_pane_status(false)?;
+    let path = pane_status_file_path()?;
+    if !path.exists() {
+        return Ok(HashMap::new());
+    }
+    let contents = fs::read_to_string(&path).context("Failed to read pane-status file")?;
+    let map: PaneStatusMap =
+        serde_json::from_str(&contents).context("Failed to parse pane-status file")?;
+    Ok(map)
+}
+
+pub fn write_pane_status(map: &PaneStatusMap) -> Result<()> {
+    let _lock = lock_pane_status(true)?;
+    let path = pane_status_file_path()?;
+    let dir = path.parent().context("pane-status file path has no parent")?;
+    let temp_path = dir.join("pane-status.json.tmp");
+    let contents = serde_json::to_string_pretty(map)?;
+    fs::write(&temp_path, &contents).context("Failed to write temp pane-status file")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(&temp_path, perms)
+            .context("Failed to set pane-status file permissions")?;
+    }
+
+    fs::rename(&temp_path, &path).context("Failed to rename temp pane-status file")?;
+    Ok(())
+}

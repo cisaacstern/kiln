@@ -50,6 +50,17 @@ enum Commands {
         #[arg(long, hide = true)]
         daemon: bool,
     },
+    /// Set pane status (called by Claude Code hooks)
+    PaneStatus {
+        /// Status to set: working, waiting, done, unknown
+        status: String,
+    },
+    /// Run the sidebar info bar
+    Sidebar {
+        /// Run as daemon (interactive loop)
+        #[arg(long)]
+        daemon: bool,
+    },
     /// Tear down tmux session and tsk server
     Stop,
 }
@@ -92,6 +103,15 @@ fn main() -> anyhow::Result<()> {
         Commands::Review { name } => commands::review::run(&name),
         Commands::Approve { name } => commands::approve::run(&name),
         Commands::Status { watch, daemon } => commands::status::run(watch, daemon),
+        Commands::PaneStatus { status } => commands::pane_status::run(&status),
+        Commands::Sidebar { daemon } => {
+            if daemon {
+                commands::sidebar::run_daemon()
+            } else {
+                println!("Use --daemon to run the sidebar in interactive mode.");
+                Ok(())
+            }
+        }
         Commands::Stop => commands::stop::run(),
     }
 }
