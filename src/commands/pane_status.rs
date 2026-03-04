@@ -13,16 +13,16 @@ pub fn run(status_str: &str) -> Result<()> {
     let pane_id = std::env::var("TMUX_PANE")
         .context("TMUX_PANE not set — this command must be run inside a tmux pane")?;
 
-    let title = tmux::get_pane_title(&pane_id)
-        .context("Failed to get pane title from tmux")?;
+    let kiln_name = tmux::get_pane_option(&pane_id)
+        .context("Failed to get @kiln_name from tmux")?;
 
-    if !title.starts_with("claude-") {
-        bail!("Current pane '{}' is not a Claude pane (title: {})", pane_id, title);
+    if !kiln_name.starts_with("claude-") {
+        bail!("Current pane '{}' is not a Claude pane (kiln_name: {})", pane_id, kiln_name);
     }
 
     let mut map = state::read_pane_status()?;
     map.insert(
-        title,
+        kiln_name,
         PaneStatusEntry {
             status,
             updated_at: Utc::now(),

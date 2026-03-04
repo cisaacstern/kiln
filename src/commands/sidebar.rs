@@ -60,12 +60,13 @@ fn render() -> Result<()> {
 
     for (i, pane) in panes.iter().enumerate() {
         let status = statuses
-            .get(&pane.title)
+            .get(&pane.kiln_name)
             .map(|e| e.status)
             .unwrap_or(PaneStatus::Unknown);
         let icon = status.icon();
         let marker = if Some(i) == active_idx { " *" } else { "" };
-        println!(" {} {}{}", icon, pane.title, marker);
+        let display_name = pane.kiln_name.strip_prefix("claude-").unwrap_or(&pane.kiln_name);
+        println!(" {} {}{}", icon, display_name, marker);
     }
 
     if panes.is_empty() {
@@ -148,9 +149,9 @@ fn claude_panes_sorted() -> Result<Vec<tmux::PaneInfo>> {
     let all = tmux::list_session_panes()?;
     let mut claude: Vec<_> = all
         .into_iter()
-        .filter(|p| p.title.starts_with("claude-"))
+        .filter(|p| p.kiln_name.starts_with("claude-"))
         .collect();
-    claude.sort_by(|a, b| a.title.cmp(&b.title));
+    claude.sort_by(|a, b| a.kiln_name.cmp(&b.kiln_name));
     Ok(claude)
 }
 

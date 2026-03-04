@@ -4,14 +4,14 @@ use chrono::Utc;
 use crate::state::{self, PlanEntry};
 use crate::tmux;
 
-/// Get all Claude panes (titles matching claude-*), sorted by title
+/// Get all Claude panes (kiln_name matching claude-*), sorted by kiln_name
 fn claude_panes() -> Result<Vec<tmux::PaneInfo>> {
     let all = tmux::list_session_panes()?;
     let mut claude: Vec<_> = all
         .into_iter()
-        .filter(|p| p.title.starts_with("claude-"))
+        .filter(|p| p.kiln_name.starts_with("claude-"))
         .collect();
-    claude.sort_by(|a, b| a.title.cmp(&b.title));
+    claude.sort_by(|a, b| a.kiln_name.cmp(&b.kiln_name));
     Ok(claude)
 }
 
@@ -48,6 +48,7 @@ pub fn run_new(name: &str, dir: Option<&std::path::Path>) -> Result<()> {
     // Create new Claude pane in parking window
     let new_pane_id = tmux::create_parked_pane(work_dir_str)?;
     tmux::set_pane_title(&new_pane_id, &format!("claude-{name}"))?;
+    tmux::set_pane_option(&new_pane_id, &format!("claude-{name}"))?;
 
     // Swap the new pane with the active Claude pane in window 0
     let current_claude = tmux::active_claude_pane_id()?;
@@ -78,7 +79,7 @@ pub fn run_next() -> Result<()> {
     let active_id = tmux::active_claude_pane_id()?;
     tmux::swap_pane(&panes[next].pane_id, &active_id)?;
 
-    println!("Switched to {}", panes[next].title);
+    println!("Switched to {}", panes[next].kiln_name);
     Ok(())
 }
 
@@ -98,7 +99,7 @@ pub fn run_prev() -> Result<()> {
     let active_id = tmux::active_claude_pane_id()?;
     tmux::swap_pane(&panes[prev].pane_id, &active_id)?;
 
-    println!("Switched to {}", panes[prev].title);
+    println!("Switched to {}", panes[prev].kiln_name);
     Ok(())
 }
 
@@ -115,7 +116,7 @@ pub fn run_list() -> Result<()> {
         let marker = if Some(i) == active_idx { " *" } else { "" };
         println!(
             "  {} (window {}){marker}",
-            pane.title, pane.window_index
+            pane.kiln_name, pane.window_index
         );
     }
     Ok(())

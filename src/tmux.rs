@@ -166,6 +166,7 @@ pub struct PaneInfo {
     pub pane_id: String,
     pub title: String,
     pub window_index: String,
+    pub kiln_name: String,
 }
 
 /// List all panes in the kiln session
@@ -176,16 +177,17 @@ pub fn list_session_panes() -> Result<Vec<PaneInfo>> {
         "-t",
         SESSION_NAME,
         "-F",
-        "#{pane_id}\t#{pane_title}\t#{window_index}",
+        "#{pane_id}\t#{pane_title}\t#{window_index}\t#{@kiln_name}",
     ])?;
     let mut panes = Vec::new();
     for line in output.lines() {
         let parts: Vec<&str> = line.split('\t').collect();
-        if parts.len() >= 3 {
+        if parts.len() >= 4 {
             panes.push(PaneInfo {
                 pane_id: parts[0].to_string(),
                 title: parts[1].to_string(),
                 window_index: parts[2].to_string(),
+                kiln_name: parts[3].to_string(),
             });
         }
     }
@@ -197,14 +199,24 @@ pub fn swap_pane(src_id: &str, dst_id: &str) -> Result<()> {
     run_tmux(&["swap-pane", "-s", src_id, "-t", dst_id])
 }
 
-/// Find the active Claude pane in window 0 by title (starts with "claude-")
+/// Find the active Claude pane in window 0 by kiln_name (starts with "claude-")
 pub fn active_claude_pane_id() -> Result<String> {
     let panes = list_session_panes()?;
     panes
         .iter()
-        .find(|p| p.window_index == "0" && p.title.starts_with("claude-"))
+        .find(|p| p.window_index == "0" && p.kiln_name.starts_with("claude-"))
         .map(|p| p.pane_id.clone())
         .context("No active Claude pane in window 0")
+}
+
+/// Set the @kiln_name user option on a pane
+pub fn set_pane_option(pane_id: &str, value: &str) -> Result<()> {
+    run_tmux(&["set-option", "-p", "-t", pane_id, "@kiln_name", value])
+}
+
+/// Get the @kiln_name user option from a pane
+pub fn get_pane_option(pane_id: &str) -> Result<String> {
+    run_tmux_output(&["display-message", "-t", pane_id, "-p", "#{@kiln_name}"])
 }
 
 /// Find the parking window index, if it exists
