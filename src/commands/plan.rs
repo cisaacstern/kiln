@@ -20,16 +20,6 @@ fn active_claude_pane(panes: &[tmux::PaneInfo]) -> Option<usize> {
     panes.iter().position(|p| p.window_index == "0")
 }
 
-/// Get the next claude-N index
-fn next_claude_index(panes: &[tmux::PaneInfo]) -> u32 {
-    panes
-        .iter()
-        .filter_map(|p| p.title.strip_prefix("claude-")?.parse::<u32>().ok())
-        .max()
-        .map(|n| n + 1)
-        .unwrap_or(0)
-}
-
 pub fn run_new(name: &str, dir: Option<&std::path::Path>) -> Result<()> {
     state::validate_task_name(name)?;
 
@@ -55,21 +45,22 @@ pub fn run_new(name: &str, dir: Option<&std::path::Path>) -> Result<()> {
         .to_str()
         .context("Working directory path is not valid UTF-8")?;
 
-    // Create new Claude pane
-    let existing = claude_panes()?;
-    let idx = next_claude_index(&existing);
-    let new_pane_id = tmux::new_hidden_window(work_dir_str)?;
-    tmux::set_pane_title(&new_pane_id, &format!("claude-{idx}"))?;
+    // Create new Claude pane in parking window
+    let new_pane_id = tmux::create_parked_pane(work_dir_str)?;
+    tmux::set_pane_title(&new_pane_id, &format!("claude-{name}"))?;
 
-    // Swap the new pane into pane 4 of window 0 (the Claude pane; pane 3 is the sidebar)
-    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
-    if current_pane4 != new_pane_id {
-        tmux::swap_pane(&new_pane_id, &current_pane4)?;
+    // Swap the new pane with the active Claude pane in window 0
+    let current_claude = tmux::active_claude_pane_id()?;
+    if current_claude != new_pane_id {
+        tmux::swap_pane(&new_pane_id, &current_claude)?;
     }
+
+    // Ensure client stays on window 0
+    tmux::select_window("kiln:0")?;
 
     println!(
         "Plan '{}' registered. Claude pane claude-{} is now active.",
-        name, idx
+        name, name
     );
     println!("Write your plan in Claude, then run 'kiln queue {}'.", name);
     Ok(())
@@ -84,8 +75,8 @@ pub fn run_next() -> Result<()> {
     let current = active_claude_pane(&panes).context("No active Claude pane in window 0")?;
     let next = (current + 1) % panes.len();
 
-    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
-    tmux::swap_pane(&panes[next].pane_id, &current_pane4)?;
+    let active_id = tmux::active_claude_pane_id()?;
+    tmux::swap_pane(&panes[next].pane_id, &active_id)?;
 
     println!("Switched to {}", panes[next].title);
     Ok(())
@@ -104,8 +95,8 @@ pub fn run_prev() -> Result<()> {
         current - 1
     };
 
-    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
-    tmux::swap_pane(&panes[prev].pane_id, &current_pane4)?;
+    let active_id = tmux::active_claude_pane_id()?;
+    tmux::swap_pane(&panes[prev].pane_id, &active_id)?;
 
     println!("Switched to {}", panes[prev].title);
     Ok(())

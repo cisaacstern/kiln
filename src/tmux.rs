@@ -197,25 +197,76 @@ pub fn swap_pane(src_id: &str, dst_id: &str) -> Result<()> {
     run_tmux(&["swap-pane", "-s", src_id, "-t", dst_id])
 }
 
-/// Create a new hidden window with claude running, return its pane ID
-pub fn new_hidden_window(dir: &str) -> Result<String> {
-    let pane_id = run_tmux_output(&[
-        "new-window",
-        "-d",
+/// Find the active Claude pane in window 0 by title (starts with "claude-")
+pub fn active_claude_pane_id() -> Result<String> {
+    let panes = list_session_panes()?;
+    panes
+        .iter()
+        .find(|p| p.window_index == "0" && p.title.starts_with("claude-"))
+        .map(|p| p.pane_id.clone())
+        .context("No active Claude pane in window 0")
+}
+
+/// Find the parking window index, if it exists
+fn find_parking_window() -> Result<Option<String>> {
+    let output = run_tmux_output(&[
+        "list-windows",
         "-t",
-        &format!("{}:", SESSION_NAME),
-        "-c",
-        dir,
-        "-P",
+        SESSION_NAME,
         "-F",
-        "#{pane_id}",
+        "#{window_index}\t#{window_name}",
     ])?;
-    // Send claude command to the new pane
+    for line in output.lines() {
+        let parts: Vec<&str> = line.split('\t').collect();
+        if parts.len() >= 2 && parts[1] == "park" {
+            return Ok(Some(parts[0].to_string()));
+        }
+    }
+    Ok(None)
+}
+
+/// Create a new Claude pane in the parking window, return its pane ID
+pub fn create_parked_pane(dir: &str) -> Result<String> {
+    let pane_id = if let Some(win_idx) = find_parking_window()? {
+        // Split inside existing parking window
+        run_tmux_output(&[
+            "split-window",
+            "-t",
+            &format!("{SESSION_NAME}:{win_idx}"),
+            "-d",
+            "-c",
+            dir,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ])?
+    } else {
+        // Create new parking window
+        run_tmux_output(&[
+            "new-window",
+            "-d",
+            "-t",
+            &format!("{SESSION_NAME}:"),
+            "-n",
+            "park",
+            "-c",
+            dir,
+            "-P",
+            "-F",
+            "#{pane_id}",
+        ])?
+    };
+    // Start claude in the new pane
     run_tmux(&["send-keys", "-t", &pane_id, "claude", "Enter"])?;
     Ok(pane_id)
 }
 
-/// Get the pane ID for a target specifier (e.g. "kiln:0.4")
+/// Select/focus a window by target
+pub fn select_window(target: &str) -> Result<()> {
+    run_tmux(&["select-window", "-t", target])
+}
+
+/// Get the pane ID for a target specifier (e.g. "kiln:0.3")
 pub fn get_pane_id(target: &str) -> Result<String> {
     run_tmux_output(&["display-message", "-t", target, "-p", "#{pane_id}"])
 }

@@ -37,7 +37,7 @@ pub fn run() -> Result<()> {
 
     // Title the Claude pane
     let pane_id = tmux::get_pane_id("kiln:0.3")?;
-    tmux::set_pane_title(&pane_id, "claude-0")?;
+    tmux::set_pane_title(&pane_id, "claude-main")?;
 
     // Create sidebar pane to the left of the Claude pane
     let sidebar_pane_id = tmux::split_pane_horizontal(&pane_id, 25, project_dir_str, true)?;

@@ -123,8 +123,8 @@ fn switch_pane(dir: Direction) -> Result<()> {
         }
     };
 
-    let pane4 = tmux::get_pane_id("kiln:0.4")?;
-    tmux::swap_pane(&panes[target].pane_id, &pane4)?;
+    let active_id = tmux::active_claude_pane_id()?;
+    tmux::swap_pane(&panes[target].pane_id, &active_id)?;
     Ok(())
 }
 
@@ -139,8 +139,8 @@ fn switch_to_index(idx: usize) -> Result<()> {
         return Ok(());
     }
 
-    let pane4 = tmux::get_pane_id("kiln:0.4")?;
-    tmux::swap_pane(&panes[idx].pane_id, &pane4)?;
+    let active_id = tmux::active_claude_pane_id()?;
+    tmux::swap_pane(&panes[idx].pane_id, &active_id)?;
     Ok(())
 }
 
