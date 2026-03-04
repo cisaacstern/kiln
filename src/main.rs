@@ -61,6 +61,14 @@ enum Commands {
         #[arg(long)]
         daemon: bool,
     },
+    /// Import an orphaned tsk task into kiln state
+    Sync {
+        /// Task name (must match tsk task name)
+        name: String,
+        /// Base branch to diff against
+        #[arg(long, default_value = "main")]
+        base_ref: String,
+    },
     /// Tear down tmux session and tsk server
     Stop,
 }
@@ -112,6 +120,7 @@ fn main() -> anyhow::Result<()> {
                 Ok(())
             }
         }
+        Commands::Sync { name, base_ref } => commands::sync::run(&name, &base_ref),
         Commands::Stop => commands::stop::run(),
     }
 }

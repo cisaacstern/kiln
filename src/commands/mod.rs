@@ -7,3 +7,4 @@ pub mod sidebar;
 pub mod start;
 pub mod status;
 pub mod stop;
+pub mod sync;
