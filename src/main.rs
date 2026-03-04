@@ -22,9 +22,14 @@ enum Commands {
     Queue {
         /// Task name
         name: String,
-        /// Path to prompt file
+        /// Path to prompt file (optional if a plan is registered)
         #[arg(long)]
-        prompt_file: PathBuf,
+        prompt_file: Option<PathBuf>,
+    },
+    /// Manage Claude plan sessions
+    Plan {
+        #[command(subcommand)]
+        action: PlanAction,
     },
     /// Launch difit for diff review, capture comments, auto-queue follow-up
     Review {
@@ -49,12 +54,41 @@ enum Commands {
     Stop,
 }
 
+#[derive(Subcommand)]
+enum PlanAction {
+    /// Create a new named plan with a fresh Claude pane
+    New {
+        /// Plan/task name
+        #[arg(short, long)]
+        name: String,
+        /// Working directory for the Claude pane
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
+    /// Swap next Claude pane into view
+    Next,
+    /// Swap previous Claude pane into view
+    Prev,
+    /// List all Claude panes
+    List,
+}
+
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Commands::Start => commands::start::run(),
-        Commands::Queue { name, prompt_file } => commands::queue::run(&name, &prompt_file),
+        Commands::Queue { name, prompt_file } => {
+            commands::queue::run(&name, prompt_file.as_deref())
+        }
+        Commands::Plan { action } => match action {
+            PlanAction::New { name, dir } => {
+                commands::plan::run_new(&name, dir.as_deref())
+            }
+            PlanAction::Next => commands::plan::run_next(),
+            PlanAction::Prev => commands::plan::run_prev(),
+            PlanAction::List => commands::plan::run_list(),
+        },
         Commands::Review { name } => commands::review::run(&name),
         Commands::Approve { name } => commands::approve::run(&name),
         Commands::Status { watch, daemon } => commands::status::run(watch, daemon),

@@ -35,6 +35,10 @@ pub fn run() -> Result<()> {
     // Pane 3: claude code
     tmux::send_keys(3, "claude")?;
 
+    // Title the Claude pane
+    let pane_id = tmux::get_pane_id("kiln:0.4")?;
+    tmux::set_pane_title(&pane_id, "claude-0")?;
+
     // Focus the main terminal pane
     tmux::select_pane(0)?;
 

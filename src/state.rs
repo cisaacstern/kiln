@@ -65,6 +65,10 @@ pub fn kiln_dir() -> Result<PathBuf> {
     if !dir.exists() {
         fs::create_dir_all(&dir).context("Failed to create .kiln directory")?;
     }
+    let plans_dir = dir.join("plans");
+    if !plans_dir.exists() {
+        fs::create_dir_all(&plans_dir).context("Failed to create .kiln/plans directory")?;
+    }
     Ok(dir)
 }
 
@@ -206,4 +210,74 @@ pub fn validate_git_ref(ref_name: &str) -> Result<()> {
 /// Count tasks by status
 pub fn count_by_status(state: &StateMap, status: Status) -> usize {
     state.values().filter(|t| t.status == status).count()
+}
+
+// --- Plan registry ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlanEntry {
+    pub created_at: DateTime<Utc>,
+    pub plan_file: Option<String>,
+}
+
+pub type PlanMap = HashMap<String, PlanEntry>;
+
+fn plans_file_path() -> Result<PathBuf> {
+    Ok(kiln_dir()?.join("plans.json"))
+}
+
+fn lock_plans(exclusive: bool) -> Result<fs::File> {
+    let lock_path = kiln_dir()?.join("plans.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .context("Failed to open plans lock file")?;
+    if exclusive {
+        lock_file
+            .lock_exclusive()
+            .context("Failed to acquire exclusive plans lock")?;
+    } else {
+        lock_file
+            .lock_shared()
+            .context("Failed to acquire shared plans lock")?;
+    }
+    Ok(lock_file)
+}
+
+pub fn read_plans() -> Result<PlanMap> {
+    let _lock = lock_plans(false)?;
+    let path = plans_file_path()?;
+    if !path.exists() {
+        return Ok(HashMap::new());
+    }
+    let contents = fs::read_to_string(&path).context("Failed to read plans file")?;
+    let plans: PlanMap = serde_json::from_str(&contents).context("Failed to parse plans file")?;
+    Ok(plans)
+}
+
+pub fn write_plans(plans: &PlanMap) -> Result<()> {
+    let _lock = lock_plans(true)?;
+    let path = plans_file_path()?;
+    let dir = path.parent().context("plans file path has no parent")?;
+    let temp_path = dir.join("plans.json.tmp");
+    let contents = serde_json::to_string_pretty(plans)?;
+    fs::write(&temp_path, &contents).context("Failed to write temp plans file")?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(&temp_path, perms)
+            .context("Failed to set plans file permissions")?;
+    }
+
+    fs::rename(&temp_path, &path).context("Failed to rename temp plans file")?;
+    Ok(())
+}
+
+/// Get the plans directory path
+pub fn plans_dir() -> Result<PathBuf> {
+    Ok(kiln_dir()?.join("plans"))
 }
