@@ -75,6 +75,90 @@ pub fn kiln_dir() -> Result<PathBuf> {
     Ok(base)
 }
 
+/// Returns the base directory containing all repo state dirs: ~/.local/share/kiln/repos/
+pub fn repos_base_dir() -> Result<PathBuf> {
+    Ok(data_dir()?.join("kiln").join("repos"))
+}
+
+/// Strip the trailing -<16hex> hash suffix from a repo directory name.
+fn repo_display_name(dir_name: &str) -> String {
+    // Pattern: "name-<16 hex chars>"
+    if let Some(pos) = dir_name.rfind('-') {
+        let suffix = &dir_name[pos + 1..];
+        if suffix.len() == 16 && suffix.chars().all(|c| c.is_ascii_hexdigit()) {
+            return dir_name[..pos].to_string();
+        }
+    }
+    dir_name.to_string()
+}
+
+/// Enumerate all repo state directories, returning (display_name, path) sorted alphabetically.
+pub fn list_all_repos() -> Result<Vec<(String, PathBuf)>> {
+    let base = repos_base_dir()?;
+    if !base.exists() {
+        return Ok(Vec::new());
+    }
+    let mut repos = Vec::new();
+    for entry in fs::read_dir(&base).context("Failed to read repos directory")? {
+        let entry = entry?;
+        if entry.file_type()?.is_dir() {
+            let dir_name = entry.file_name().to_string_lossy().to_string();
+            let display = repo_display_name(&dir_name);
+            repos.push((display, entry.path()));
+        }
+    }
+    repos.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(repos)
+}
+
+/// Read state.json from a specific repo directory (shared lock).
+pub fn read_state_for_dir(dir: &std::path::Path) -> Result<StateMap> {
+    let state_path = dir.join("state.json");
+    let lock_path = dir.join("state.lock");
+    if !state_path.exists() {
+        return Ok(HashMap::new());
+    }
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .context("Failed to open state lock file")?;
+    lock_file
+        .lock_shared()
+        .context("Failed to acquire shared state lock")?;
+    let contents = fs::read_to_string(&state_path).context("Failed to read state file")?;
+    let state: StateMap = serde_json::from_str(&contents).context("Failed to parse state file")?;
+    Ok(state)
+}
+
+/// Write state.json to a specific repo directory (exclusive lock).
+pub fn write_state_to_dir(dir: &std::path::Path, state: &StateMap) -> Result<()> {
+    let state_path = dir.join("state.json");
+    let lock_path = dir.join("state.lock");
+    let lock_file = fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(false)
+        .open(&lock_path)
+        .context("Failed to open state lock file")?;
+    lock_file
+        .lock_exclusive()
+        .context("Failed to acquire exclusive state lock")?;
+    let temp_path = dir.join("state.json.tmp");
+    let contents = serde_json::to_string_pretty(state)?;
+    fs::write(&temp_path, &contents).context("Failed to write temp state file")?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let perms = std::fs::Permissions::from_mode(0o600);
+        std::fs::set_permissions(&temp_path, perms)
+            .context("Failed to set state file permissions")?;
+    }
+    fs::rename(&temp_path, &state_path).context("Failed to rename temp state file")?;
+    Ok(())
+}
+
 /// Compute a stable, filesystem-safe identifier for a repo path.
 fn repo_hash(root: &std::path::Path) -> String {
     use std::collections::hash_map::DefaultHasher;
