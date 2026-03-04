@@ -1,4 +1,4 @@
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use std::io::Write;
 use std::process::Command;
 
@@ -87,6 +87,19 @@ fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result
     writeln!(file)?;
     writeln!(file, "{comments}")?;
 
+    // Checkout the reviewed branch so tsk bases the follow-up on it
+    let checkout = Command::new("git")
+        .args(["checkout", &task.tsk_branch])
+        .output()
+        .context("Failed to checkout reviewed branch")?;
+    if !checkout.status.success() {
+        bail!(
+            "git checkout {} failed: {}",
+            task.tsk_branch,
+            String::from_utf8_lossy(&checkout.stderr)
+        );
+    }
+
     // Queue new tsk task with the distinct follow-up name
     let (tsk_id, tsk_branch) = tsk::add_task(&followup_name, &prompt_path)?;
 
@@ -102,8 +115,8 @@ fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result
             status: Status::Queued,
             tsk_id,
             tsk_branch,
-            base_ref: task.base_ref.clone(),
-            base_commit: task.base_commit.clone(),
+            base_ref: task.tsk_branch.clone(),
+            base_commit: resolve_branch_head(&task.tsk_branch)?,
             revision: task.revision + 1,
             updated_at: chrono::Utc::now(),
         },
@@ -112,6 +125,18 @@ fn queue_followup(name: &str, task: &state::TaskState, comments: &str) -> Result
 
     println!("Follow-up '{followup_name}' queued (revision {})", task.revision + 1);
     Ok(())
+}
+
+fn resolve_branch_head(branch: &str) -> Result<String> {
+    state::validate_git_ref(branch)?;
+    let output = Command::new("git")
+        .args(["rev-parse", branch])
+        .output()
+        .context("Failed to run git rev-parse")?;
+    if !output.status.success() {
+        bail!("git rev-parse {} failed", branch);
+    }
+    Ok(String::from_utf8(output.stdout)?.trim().to_string())
 }
 
 #[cfg(test)]
