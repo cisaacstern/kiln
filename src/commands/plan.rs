@@ -61,10 +61,10 @@ pub fn run_new(name: &str, dir: Option<&std::path::Path>) -> Result<()> {
     let new_pane_id = tmux::new_hidden_window(work_dir_str)?;
     tmux::set_pane_title(&new_pane_id, &format!("claude-{idx}"))?;
 
-    // Swap the new pane into pane 3 of window 0
-    let current_pane3 = tmux::get_pane_id("kiln:0.3")?;
-    if current_pane3 != new_pane_id {
-        tmux::swap_pane(&new_pane_id, &current_pane3)?;
+    // Swap the new pane into pane 4 of window 0 (the Claude pane; pane 3 is the sidebar)
+    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
+    if current_pane4 != new_pane_id {
+        tmux::swap_pane(&new_pane_id, &current_pane4)?;
     }
 
     println!(
@@ -84,8 +84,8 @@ pub fn run_next() -> Result<()> {
     let current = active_claude_pane(&panes).context("No active Claude pane in window 0")?;
     let next = (current + 1) % panes.len();
 
-    let current_pane3 = tmux::get_pane_id("kiln:0.3")?;
-    tmux::swap_pane(&panes[next].pane_id, &current_pane3)?;
+    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
+    tmux::swap_pane(&panes[next].pane_id, &current_pane4)?;
 
     println!("Switched to {}", panes[next].title);
     Ok(())
@@ -104,8 +104,8 @@ pub fn run_prev() -> Result<()> {
         current - 1
     };
 
-    let current_pane3 = tmux::get_pane_id("kiln:0.3")?;
-    tmux::swap_pane(&panes[prev].pane_id, &current_pane3)?;
+    let current_pane4 = tmux::get_pane_id("kiln:0.4")?;
+    tmux::swap_pane(&panes[prev].pane_id, &current_pane4)?;
 
     println!("Switched to {}", panes[prev].title);
     Ok(())
