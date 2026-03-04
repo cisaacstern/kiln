@@ -203,7 +203,7 @@ pub fn new_hidden_window(dir: &str) -> Result<String> {
         "new-window",
         "-d",
         "-t",
-        SESSION_NAME,
+        &format!("{}:", SESSION_NAME),
         "-c",
         dir,
         "-P",
